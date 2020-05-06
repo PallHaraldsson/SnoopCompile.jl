@@ -84,7 +84,7 @@ function __lookup_kwbody__(mnokw::Method)
         #        return %1
         # where `mkw` is the name of the "active" keyword body-function.
         ast = Base.uncompressed_ast(mnokw)
-        if isa(ast, Core.CodeInfo) && length(ast.code) >= 2
+        if isa(ast, CodeInfo) && length(ast.code) >= 2
             callexpr = ast.code[end-1]
             if isa(callexpr, Expr) && callexpr.head == :call
                 fsym = callexpr.args[1]
@@ -193,7 +193,7 @@ function handle_kwbody(topmod::Module, m::Method, paramrepr, tt, fstr="fbody")
     return nothing
 end
 
-function parcel(tinf::AbstractVector{Tuple{Float64,Core.MethodInstance}}; subst=Vector{Pair{String, String}}(), blacklist=String[])
+function parcel(tinf::AbstractVector{Tuple{Float64,MethodInstance}}; subst=Vector{Pair{String, String}}(), blacklist=String[])
     pc = Dict{Symbol, Set{String}}()         # output
     modgens = Dict{Module, Vector{Method}}() # methods with generators in a module
     mods = OrderedSet{Module}()                     # module of each parameter for a given method

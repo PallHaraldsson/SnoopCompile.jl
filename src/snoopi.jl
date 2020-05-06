@@ -1,15 +1,15 @@
 export @snoopi
 
-const __inf_timing__ = Tuple{Float64,Core.MethodInstance}[]
+const __inf_timing__ = Tuple{Float64,MethodInstance}[]
 
-function typeinf_ext_timed(linfo::Core.MethodInstance, params::Core.Compiler.Params)
+function typeinf_ext_timed(linfo::MethodInstance, params::Core.Compiler.Params)
     tstart = time()
     ret = Core.Compiler.typeinf_ext(linfo, params)
     tstop = time()
     push!(__inf_timing__, (tstop-tstart, linfo))
     return ret
 end
-function typeinf_ext_timed(linfo::Core.MethodInstance, world::UInt)
+function typeinf_ext_timed(linfo::MethodInstance, world::UInt)
     tstart = time()
     ret = Core.Compiler.typeinf_ext(linfo, world)
     tstop = time()
@@ -68,8 +68,8 @@ function __init__()
     # typeinf_ext_timed must be compiled before it gets run
     # We do this in __init__ to make sure it gets compiled to native code
     # (the *.ji file stores only the inferred code)
-    precompile(typeinf_ext_timed, (Core.MethodInstance, Core.Compiler.Params))
-    precompile(typeinf_ext_timed, (Core.MethodInstance, UInt))
+    precompile(typeinf_ext_timed, (MethodInstance, Core.Compiler.Params))
+    precompile(typeinf_ext_timed, (MethodInstance, UInt))
     precompile(start_timing, ())
     precompile(stop_timing, ())
     nothing
