@@ -145,7 +145,7 @@ function explain(methodtree::InvalidationData)
         println("Invalidated:")
         for (sig, tree) in invalidations.instances
             if isa(sig, Type)
-                println("  signature ", sig, ':')
+                println("  signature ", sig, " as a backedge for ", tree.mi, ':')
                 sigi = typeintersect(meth.sig, sig)
                 println("    intersection: ", sigi)
                 oldmeth = Base._methods_by_ftype(sig, -1, typemax(UInt))
