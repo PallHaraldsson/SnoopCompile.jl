@@ -25,12 +25,23 @@ function getroot(node::InstanceTree)
     return node
 end
 
+function Base.show(io::IO, node::InstanceTree; methods=false)
+    if get(io, :limit, false)
+        print(io, node.mi, " at depth ", node.depth, " with ", countchildren(node), " children")
+    else
+        println(io, " "^Int(node.depth), methods ? node.mi.def : node.mi)
+        foreach(node.children) do child
+            show(io, child; methods=methods)
+        end
+    end
+end
+
 struct Invalidations
     mt_backedges::Vector{Pair{Any,InstanceTree}}   # sig=>tree
-    tables::Vector{MethodInstance}
     backedges::Vector{Pair{MethodInstance,InstanceTree}}
+    mt_cache::Vector{MethodInstance}
 end
-Invalidations() = Invalidations(Pair{Any,InstanceTree}[], MethodInstance[], InstanceTree[])
+Invalidations() = Invalidations(Pair{Any,InstanceTree}[], Pair{MethodInstance,InstanceTree}[], MethodInstance[])
 
 struct MethodInvalidations
     method::Method
@@ -61,20 +72,36 @@ countchildren(methinv::MethodInvalidations) = countchildren(methinv.invalidation
 
 # We could use AbstractTrees here, but typically one is not interested in the full tree,
 # just the top method and the number of children it has
-function Base.show(io::IO, invalidations::Invalidations)
+function Base.show(io::IO, invalidations::Invalidations; method=nothing)
     iscompact = get(io, :compact, false)
     function showlist(io, treelist, indent=0)
         n = length(treelist)
         for (i, tree) in enumerate(treelist)
+            sig = nothing
             if isa(tree, Pair)
                 if isa(tree.first, Type)
                     print(io, "signature ", tree.first, " triggered ")
+                    sig = tree.first
                 elseif isa(tree.first, MethodInstance)
                     print(io, tree.first, " triggered ")
+                    sig = tree.first.specTypes
                 end
                 tree = tree.second
             end
             print(io, tree.mi, " (", countchildren(tree), " children)")
+            if isa(method, Method)
+                ms1, ms2 = method.sig <: sig, sig <: method.sig
+                diagnosis = if ms1 && !ms2
+                    "more specific"
+                elseif ms2 && !ms1
+                    "less specific"
+                elseif ms1 && ms2
+                    "equal specificity"
+                else
+                    "ambiguous"
+                end
+                printstyled(io, ' ', diagnosis, color=:cyan)
+            end
             if iscompact
                 i < n && print(io, ", ")
             else
@@ -93,15 +120,15 @@ function Base.show(io::IO, invalidations::Invalidations)
         end
         iscompact && print(io, "; ")
     end
-    if !isempty(invalidations.tables)
-        println(io, indent, length(invalidations.tables), " mt_cache")
+    if !isempty(invalidations.mt_cache)
+        println(io, indent, length(invalidations.mt_cache), " mt_cache")
     end
     iscompact && print(io, ';')
 end
 
 function Base.show(io::IO, methinv::MethodInvalidations)
     println(io, methinv.reason, " ", methinv.method, " invalidated:")
-    show(io, methinv.invalidations)
+    show(io, methinv.invalidations; method=methinv.method)
 end
 
 # `list` is in RPN format, with the "reason" coming after the items
@@ -152,13 +179,15 @@ function invalidation_trees(list)
             elseif isa(item, String)
                 loctag = item
                 if loctag == "invalidate_mt_cache"
-                    push!(invalidations.tables, mi)
+                    push!(invalidations.mt_cache, mi)
                     tree = nothing
                 elseif loctag == "jl_method_table_insert"
                     push!(invalidations.backedges, mi=>getroot(tree))
                     tree = nothing
+                elseif loctag == "insert_backedges"
+                    println("insert_backedges for ", mi)
                 else
-                    error("unexpected loctag ", loctag)
+                    error("unexpected loctag ", loctag, " at ", i)
                 end
             else
                 error("unexpected item ", item, " at ", i)
@@ -190,6 +219,13 @@ function invalidation_trees(list)
     return sort(methodtrees; by=countchildren)
 end
 
+function Base.getindex(methodtree::MethodInvalidations, fn::Symbol)
+    invs = methodtree.invalidations
+    return getfield(invs, fn)
+end
+
+Base.getindex(methodtree::MethodInvalidations, fn::Symbol, idx::Int) = methodtree[fn][idx]
+
 # function explain(methodtree::MethodInvalidations)
 #     meth, invalidations = methodtree
 #     if isa(meth, Method)
@@ -211,7 +247,7 @@ end
 #             end
 #             println("  ", countchildren(tree), " direct and indirect descendants")
 #         end
-#         for tree in invalidations.tables
+#         for tree in invalidations.mt_cache
 #             println("  method table for ", tree.mi)
 #             println("    ", countchildren(tree), " direct and indirect descendants")
 #         end
@@ -228,9 +264,9 @@ end
 #             idx = findfirst(mi, inst.second)
 #             idx !== nothing && return Any[methodtree, :instances, i, idx...]
 #         end
-#         for (i, inst) in enumerate(invalidations.tables)
+#         for (i, inst) in enumerate(invalidations.mt_cache)
 #             idx = findfirst(mi, inst)
-#             idx !== nothing && return Any[methodtree, :tables, i, idx...]
+#             idx !== nothing && return Any[methodtree, :mt_cache, i, idx...]
 #         end
 #     end
 #     return nothing
