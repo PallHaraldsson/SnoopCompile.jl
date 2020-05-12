@@ -11,7 +11,7 @@ function hastv(typ)
     return false
 end
 
-trees = invalidation_trees(@snoopr using DifferentialEquations)
+trees = invalidation_trees(@snoopr using Revise)
 
 function summary(trees)
     npartial = ngreater = nlesser = nambig = nequal = 0
@@ -20,23 +20,29 @@ function summary(trees)
         invs = methodtree.invalidations
         for fn in (:mt_backedges, :backedges)
             list = getfield(invs, fn)
-            for (trigger, invtree) in list
-                sig = isa(trigger, Core.MethodInstance) ? trigger.specTypes : trigger
+            for item in list
+                sig = nothing
+                if isa(item, Pair)
+                    sig = item.first
+                    item = item.second
+                else
+                    sig = item.mi.def.sig
+                end
                 # if hastv(sig)
                 #     npartial += countchildren(invtree)
                 # else
                     ms1, ms2 = method.sig <: sig, sig <: method.sig
                     if ms1 && !ms2
-                        ngreater += countchildren(invtree)
+                        ngreater += countchildren(item)
                     elseif ms2 && !ms1
-                        nlesser += countchildren(invtree)
+                        nlesser += countchildren(item)
                     elseif ms1 && ms2
-                        nequal += countchildren(invtree)
+                        nequal += countchildren(item)
                     else
                         # if hastv(sig)
-                        #     npartial += countchildren(invtree)
+                        #     npartial += countchildren(item)
                         # else
-                            nambig += countchildren(invtree)
+                            nambig += countchildren(item)
                         # end
                     end
                 # end

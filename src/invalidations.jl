@@ -97,6 +97,9 @@ function Base.show(io::IO, invalidations::Invalidations; method=nothing)
                 print(io, "signature ", tree.first, " triggered ")
                 sig = tree.first
                 tree = tree.second
+            else
+                print(io, "superseding ", tree.mi.def , " with ")
+                sig = tree.mi.def.sig
             end
             print(io, tree.mi, " (", countchildren(tree), " children)")
             if isa(method, Method) && sig !== nothing
@@ -105,7 +108,7 @@ function Base.show(io::IO, invalidations::Invalidations; method=nothing)
                     "more specific"
                 elseif ms2 && !ms1
                     "less specific"
-                elseif ms1 && ms2
+                elseif ms1 && ms1
                     "equal specificity"
                 else
                     "ambiguous"
