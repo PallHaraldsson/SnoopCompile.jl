@@ -1,22 +1,37 @@
 export @snoopr, invalidation_trees, explain
 
-# This doesn't technically have to be mutable but it's more convenient for testing equality
+dummy() = nothing
+dummy()
+const dummyinstance = which(dummy, ()).specializations[1]
+
 mutable struct InstanceTree
     mi::MethodInstance
     depth::Int32
     children::Vector{InstanceTree}
     parent::InstanceTree
 
-    # Create tree root
-    function InstanceTree(mi::MethodInstance)
-        new(mi, Int32(0), InstanceTree[])
+    # Create tree root, but return a leaf
+    function InstanceTree(mi::MethodInstance, depth)
+        tree = new(mi, depth, InstanceTree[])
+        child = tree
+        while depth > 0
+            depth -= 1
+            parent = new(dummyinstance, depth, InstanceTree[])
+            push!(parent.children, child)
+            child.parent = parent
+            child = parent
+    end
+        return tree
     end
     # Create child
     function InstanceTree(mi::MethodInstance, depth, children, parent)
         new(mi, depth, children, parent)
     end
 end
-InstanceTree(mi::MethodInstance, parent::InstanceTree) = InstanceTree(mi, parent.depth+Int32(1), InstanceTree[], parent)
+function InstanceTree(mi::MethodInstance, parent::InstanceTree, depth)
+    @assert parent.depth + Int32(1) == depth
+    InstanceTree(mi, depth, InstanceTree[], parent)
+end
 
 function getroot(node::InstanceTree)
     while isdefined(node, :parent)
@@ -166,13 +181,13 @@ function invalidation_trees(list)
             if isa(item, Int32)
                 depth = item
                 if tree === nothing
-                    tree = InstanceTree(mi)
+                    tree = InstanceTree(mi, depth)
                 else
                     # Recurse back up the tree until we find the right parent
                     while tree.depth >= depth
                         tree = tree.parent
                     end
-                    newtree = InstanceTree(mi, tree)
+                    newtree = InstanceTree(mi, tree, depth)
                     push!(tree.children, newtree)
                     tree = newtree
                 end
