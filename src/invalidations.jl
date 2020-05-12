@@ -20,7 +20,7 @@ mutable struct InstanceTree
             push!(parent.children, child)
             child.parent = parent
             child = parent
-    end
+        end
         return tree
     end
     # Create child
@@ -53,7 +53,7 @@ end
 
 struct Invalidations
     mt_backedges::Vector{Pair{Any,InstanceTree}}   # sig=>tree
-    backedges::Vector{Pair{MethodInstance,InstanceTree}}
+    backedges::Vector{InstanceTree}
     mt_cache::Vector{MethodInstance}
 end
 Invalidations() = Invalidations(Pair{Any,InstanceTree}[], Pair{MethodInstance,InstanceTree}[], MethodInstance[])
@@ -94,17 +94,12 @@ function Base.show(io::IO, invalidations::Invalidations; method=nothing)
         for (i, tree) in enumerate(treelist)
             sig = nothing
             if isa(tree, Pair)
-                if isa(tree.first, Type)
-                    print(io, "signature ", tree.first, " triggered ")
-                    sig = tree.first
-                elseif isa(tree.first, MethodInstance)
-                    print(io, tree.first, " triggered ")
-                    sig = tree.first.specTypes
-                end
+                print(io, "signature ", tree.first, " triggered ")
+                sig = tree.first
                 tree = tree.second
             end
             print(io, tree.mi, " (", countchildren(tree), " children)")
-            if isa(method, Method)
+            if isa(method, Method) && sig !== nothing
                 ms1, ms2 = method.sig <: sig, sig <: method.sig
                 diagnosis = if ms1 && !ms2
                     "more specific"
@@ -197,7 +192,9 @@ function invalidation_trees(list)
                     push!(invalidations.mt_cache, mi)
                     tree = nothing
                 elseif loctag == "jl_method_table_insert"
-                    push!(invalidations.backedges, mi=>getroot(tree))
+                    tree = getroot(tree)
+                    tree.mi = mi
+                    push!(invalidations.backedges, tree)
                     tree = nothing
                 elseif loctag == "insert_backedges"
                     println("insert_backedges for ", mi)
